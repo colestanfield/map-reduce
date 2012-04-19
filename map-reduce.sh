@@ -1,11 +1,12 @@
 #!/bin/bash
 
 usage() {
-	echo "Usage: $1 [?] [-m <map.sh>] [-r <reduce.sh>] [-t <tmp>] <host>[ <host>][...]" >&2
+	echo "Usage: $1 [?] [-m <map.sh>] [-r <reduce.sh>] [-t <tmp>] [-d] <host>[ <host>][...]" >&2
 	if [ -n "$2" ] ; then
 		echo "  -m map program (effectively defaults to cat)" >&2
 		echo "  -r reduce program (data fed in through /dev/stdin)" >&2
 		echo "  -t tmp directory (defaults to /tmp)" >&2
+		echo "  -d don't clean up job files (defaults to false)" >&2
 		echo "  -? prints this message" >&2
 	fi
 	exit 2
@@ -32,13 +33,15 @@ pjoin() {
 map=
 reduce=
 tmp=/tmp
+clean=true
 
 program=$(basename $0)
-while getopts "m:r:t:" name; do
+while getopts "m:r:t:d" name; do
 	case "$name" in
 		m) map=$OPTARG;;
 		r) reduce=$OPTARG;;
         t) tmp=$OPTARG;;
+		d) clean=false;;
 		?) usage $program MOAR;;
 		*) usage $program;;
 	esac
@@ -57,8 +60,6 @@ job_dir=$tmp/$jobid
 mkdir -p $job_dir
 files=()
 
-echo "job: $job_dir" >&2
-
 for host in ${hosts[@]}; do
     file=$job_dir/$host.txt
     pfork cat "$map" | ssh -T $host > $file
@@ -67,6 +68,6 @@ done
 
 pjoin
 
-cat ${files[@]} | sh "$reduce" > $job_dir/output.txt
+cat ${files[@]} | sh "$reduce"
 
-cat $job_dir/output.txt
+[[ $clean ]] && rm -rf $job_dir
